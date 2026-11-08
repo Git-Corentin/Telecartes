@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Télécartes</title>
+<meta name="description" content="Une collection de télécartes françaises, à parcourir par année, par puce et par tirage.">
+<meta name="theme-color" content="#123FA8">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="assets/fonts/cabin-variable.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="puce-sc" viewBox="0 0 100 80"><rect x="1" y="1" width="98" height="78" rx="11" fill="currentColor"/><g fill="none" stroke="#000" stroke-opacity=".55" stroke-width="2.4"><path d="M36 1v22H1M64 1v22h35M36 79V57H1M64 79V57h35M1 40h30M99 40H69"/><ellipse cx="50" cy="40" rx="19" ry="17"/></g></symbol>
+    <symbol id="puce-so" viewBox="0 0 100 80"><rect x="1" y="1" width="98" height="78" rx="11" fill="currentColor"/><g fill="none" stroke="#000" stroke-opacity=".55" stroke-width="2.4"><path d="M32 1v28H1M68 1v28h31M32 79V51H1M68 79V51h31"/><rect x="32" y="29" width="36" height="22" rx="3"/><path d="M50 1v28M50 79V51"/></g></symbol>
+    <symbol id="puce-gem" viewBox="0 0 100 80"><rect x="1" y="1" width="98" height="78" rx="11" fill="currentColor"/><g fill="none" stroke="#000" stroke-opacity=".55" stroke-width="2.4"><path d="M1 26h26l12-25M99 26H73L61 1M1 54h26l12 25M99 54H73L61 79"/><path d="M27 26v28M73 26v28"/></g></symbol>
+    <symbol id="puce-ob" viewBox="0 0 100 80"><rect x="1" y="1" width="98" height="78" rx="11" fill="currentColor"/><g fill="none" stroke="#000" stroke-opacity=".55" stroke-width="2.4"><path d="M1 20h98M1 60h98M34 20v40M66 20v40"/><circle cx="50" cy="40" r="10"/></g></symbol>
+    <symbol id="puce-autre" viewBox="0 0 100 80"><rect x="1" y="1" width="98" height="78" rx="11" fill="currentColor"/><g fill="none" stroke="#000" stroke-opacity=".55" stroke-width="2.4"><path d="M40 1v78M60 1v78M1 27h39M1 53h39M60 27h39M60 53h39"/></g></symbol>
+  </defs>
+</svg>
+
+<a class="evitement" href="#contenu">Aller au contenu</a>
+
+<header class="facade">
+  <div class="enseigne">
+    <a class="titre" href="#/collection" id="titre">Télécartes</a>
+    <p class="sous-titre" id="sous-titre"></p>
+    <nav class="nav" id="nav" aria-label="Rubriques"></nav>
+  </div>
+
+  <form class="ecran" id="ecran" role="search" autocomplete="off">
+    <div class="ligne" aria-hidden="true"><span class="fantome" id="fantome1"></span><span id="lcd1" class="seg"></span></div>
+    <div class="ligne"><span class="fantome" id="fantome2" aria-hidden="true"></span>
+      <label class="masque" for="q">Rechercher une référence, un nom, une puce</label>
+      <input id="q" class="seg" type="search" placeholder="NUMEROTEZ" maxlength="40" spellcheck="false" autocapitalize="characters">
+    </div>
+    <p class="masque" id="annonce" role="status"></p>
+  </form>
+
+  <div class="clavier" id="clavier" role="group" aria-label="Clavier du publiphone">
+    <button type="button" data-k="1">1</button><button type="button" data-k="2">2</button><button type="button" data-k="3">3</button>
+    <button type="button" data-k="4">4</button><button type="button" data-k="5">5</button><button type="button" data-k="6">6</button>
+    <button type="button" data-k="7">7</button><button type="button" data-k="8">8</button><button type="button" data-k="9">9</button>
+    <button type="button" data-k="*" aria-label="Effacer" title="Effacer">*</button><button type="button" data-k="0">0</button><button type="button" data-k="#" aria-label="Ouvrir le premier résultat" title="Ouvrir le premier résultat">#</button>
+  </div>
+
+  <div class="lecteur" id="lecteur"></div>
+</header>
+
+<main id="contenu" tabindex="-1"></main>
+
+<footer class="pied">
+  <p id="pied-texte"></p>
+  <p id="pied-compte"></p>
+</footer>
+
+<dialog id="fiche" aria-label="Fiche de la carte"><div id="fiche-corps"></div><div class="pile-messages" id="messages-fiche" aria-live="polite"></div></dialog>
+<div class="pile-messages" id="messages" aria-live="polite"></div>
+
+<script src="config.js"></script>
+<script src="vendor/supabase.js"></script>
+<script src="vendor/jspdf.umd.min.js"></script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
