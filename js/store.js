@@ -54,10 +54,42 @@ function calculerAbsentes() {
     texte: norm([x.reference, x.nom, x.puce, annee(x), x.unites].join(" ")),
   }));
 }
+// Le dépôt des images peut avoir eu lieu avant l'import du catalogue : la présence du fichier
+// dans le stockage fait foi, quel que soit l'ordre dans lequel les choses ont été faites.
+let codesVisuels = new Set();
+const urlCode = (code) => sb.storage.from("visuels").getPublicUrl(`catalogue/${code}.webp`).data.publicUrl;
+async function listerVisuels() {
+  if (S.demo) return;
+  const codes = new Set();
+  for (let de = 0; ; de += 1000) {
+    const { data, error } = await sb.storage.from("visuels").list("catalogue", { limit: 1000, offset: de });
+    if (error || !data) break;
+    for (const f of data) codes.add(f.name.replace(/\.[^.]+$/, ""));
+    if (data.length < 1000) break;
+  }
+  codesVisuels = codes;
+}
+const completerImage = (x) => {
+  if (!x.image_url && x.source_id && codesVisuels.has(x.source_id)) x.image_url = urlCode(x.source_id);
+  return x;
+};
 export async function chargerCatalogue() {
   if (S.catalogue) return;
-  S.catalogue = await db.catalogueEntier();
+  const lignes = await db.catalogueEntier();
+  await listerVisuels();
+  S.catalogue = lignes.map(completerImage);
   calculerAbsentes();
+}
+
+// Ligne du catalogue portant un visuel pour cette référence, en remontant de F427Aa à F427A puis F427.
+export function visuelCatalogue(ref) {
+  if (!S.catalogue || !ref) return null;
+  const racine = /^[A-Za-z-]*\d+/.exec(ref)?.[0] || ref;
+  for (let essai = ref; essai.length >= racine.length; essai = essai.slice(0, -1)) {
+    const m = S.catalogue.find((x) => x.reference === essai && x.image_url);
+    if (m) return m;
+  }
+  return null;
 }
 
 export const possedees = () => S.cartes.filter((c) => c.n > 0);
@@ -198,7 +230,7 @@ export const db = {
     const t = q.replace(/[,()%*]/g, " ").trim();
     if (!t) return [];
     if (S.demo) { const n = norm(t); return demoCatalogue.filter((c) => norm(c.reference).startsWith(n) || norm(c.nom).includes(n)).slice(0, 12); }
-    return verifier(await sb.from("catalogue").select("*").or(`reference.ilike.${t}%,nom.ilike.%${t}%`).order("reference").limit(12));
+    return verifier(await sb.from("catalogue").select("*").or(`reference.ilike.${t}%,nom.ilike.%${t}%`).order("reference").limit(12)).map(completerImage);
   },
   async catalogueDes(refs) {
     if (S.demo) return demoCatalogue.filter((c) => refs.includes(c.reference));
@@ -225,6 +257,7 @@ export const db = {
   async imageCatalogue(code, url) {
     if (S.demo) { for (const x of demoCatalogue) if (x.source_id === code) x.image_url = url; }
     else verifier(await sb.from("catalogue").update({ image_url: url }).eq("source_id", code));
+    codesVisuels.add(code);
     for (const x of S.catalogue || []) if (x.source_id === code) x.image_url = url;
   },
   async importerCollection(items, puces, progres) {

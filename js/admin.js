@@ -1,5 +1,5 @@
 import { e, $, $$, nb, CFG, position, indiceDe, message, reduireImage, telecharger, aujourdhui, jour, urlSure, codeColnect } from "./util.js";
-import { S, db, notifier, carteParId, prochainIndice, indicesOccupes, seedVersLignes, chargerCatalogue, catalogueFourni, lignesCatalogueFourni } from "./store.js";
+import { S, db, notifier, carteParId, prochainIndice, indicesOccupes, seedVersLignes, chargerCatalogue, visuelCatalogue, catalogueFourni, lignesCatalogueFourni } from "./store.js";
 import { visuel, faceGeneree } from "./face.js";
 import { traduire, ouvrirFiche } from "./fiche.js";
 
@@ -84,7 +84,7 @@ function apercu(f) {
   const z = $("#a-apercu"); if (!z) return;
   const l = lireForm(f);
   const ex = trouver(l);
-  const c = { ...(ex || {}), ...l, an: l.date_emission ? +l.date_emission.slice(0, 4) : null, image_recto: l.image_recto || ex?.image_recto };
+  const c = { ...(ex || {}), ...l, an: l.date_emission ? +l.date_emission.slice(0, 4) : null, image_recto: l.image_recto || ex?.image_recto || visuelCatalogue(l.reference)?.image_url };
   const memes = S.cartes.filter((x) => x.reference === l.reference && x.n > 0);
   z.innerHTML = `<span class="objet grand">${l.reference || l.nom ? visuel(c) : `<span class="face vide">Aperçu</span>`}</span>
     ${ex ? `<p><b>Déjà ${ex.n} exemplaire${ex.n > 1 ? "s" : ""}.</b> Cet ajout en fera un de plus.</p><ul class="exemplaires">${ex.actifs.slice(0, 5).map((x) => { const p = position(x.indice); return `<li>Page ${p.page}, case ${p.case}</li>`; }).join("")}</ul>` : memes.length ? `<p>Cette référence existe avec une autre puce : ${memes.map((m) => `<b>${e(m.puce)}</b> (${m.unites ?? "?"} u)`).join(", ")}.</p>` : l.reference ? `<p>Nouvelle carte dans la collection.</p>` : `<p class="discret">Tapez une référence pour reprendre les informations connues.</p>`}`;
@@ -105,6 +105,7 @@ export function vueAjouter(cible, params) {
   const f = $("#f-a"), sug = $("#a-sugg");
   if (pre) remplir(f, pre);
   apercu(f);
+  chargerCatalogue().then(() => apercu(f)).catch(() => {});
   let jeton = 0;
   const proposer = async () => {
     const q = f.reference.value.trim();
@@ -139,6 +140,10 @@ export function vueAjouter(cible, params) {
       let c = trouver(l);
       const patch = { ...l, ...images };
       if (!patch.image_recto) delete patch.image_recto;
+      await chargerCatalogue().catch(() => {});
+      const vc = visuelCatalogue(l.reference);
+      if (vc && !patch.image_recto && !c?.image_recto) patch.image_recto = vc.image_url;
+      if (vc && patch.image_recto === vc.image_url) patch.image_source = vc.source;
       if (c) {
         // Un champ laissé vide ne doit pas effacer ce qu'on sait déjà de la carte.
         for (const k of Object.keys(patch)) if (patch[k] == null) delete patch[k];
@@ -359,11 +364,11 @@ export function vueAtelier(cible) {
         message(`${nb(n)} références importées dans le catalogue.`); vueAtelier(cible);
       }
       if (t.id === "t-reprendre") {
+        await chargerCatalogue();
         const manquants = S.cartes.filter((c) => !c.image_recto);
-        const cat = (await db.catalogueDes([...new Set(manquants.map((c) => c.reference))])).filter((x) => x.image_url);
         let n = 0;
         await parLots(manquants, 4, async (c) => {
-          const m = cat.find((x) => x.reference === c.reference && x.puce === c.puce) || cat.find((x) => x.reference === c.reference && !x.puce) || cat.find((x) => x.reference === c.reference);
+          const m = visuelCatalogue(c.reference);
           if (!m) return;
           const p = { image_recto: m.image_url, image_source: m.source };
           await db.modifier("cartes", c.id, p); Object.assign(c, p); n++;
