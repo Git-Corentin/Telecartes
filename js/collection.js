@@ -1,11 +1,12 @@
-import { e, $, $$, nb, eur, mois, norm, cmpRef, csv, telecharger } from "./util.js";
-import { S, possedees } from "./store.js";
+import { e, $, $$, nb, eur, mois, norm, cmpRef, csv, telecharger, message } from "./util.js";
+import { S, possedees, chargerCatalogue } from "./store.js";
 import { visuel } from "./face.js";
 import { ouvrirFiche } from "./fiche.js";
 
-export const F = { q: "", an1: null, an2: null, puces: new Set(), unites: new Set(), etat: "", dispo: "", tirage: "", cote: "", serie: "", visuel: "", tri: "ref", vue: "grille" };
+export const F = { portee: "", q: "", an1: null, an2: null, puces: new Set(), unites: new Set(), etat: "", dispo: "", tirage: "", cote: "", serie: "", visuel: "", tri: "ref", vue: "grille" };
 const LOT = 60;
 let resultat = [], affiches = 0, obs = null;
+const univers = () => (F.portee === "manques" ? S.absentes : F.portee === "tout" ? [...possedees(), ...S.absentes] : possedees());
 
 export const filtresVersParams = () => {
   const p = new URLSearchParams();
@@ -54,7 +55,7 @@ const TRIS = {
 };
 
 export function appliquer() {
-  const base = possedees().filter((c) => correspond(c));
+  const base = univers().filter((c) => correspond(c));
   const f = TRIS[F.tri]?.[1] || TRIS.ref[1];
   resultat = base.slice().sort((a, b) => (F.tri === "cote" ? (b.cote == null ? -1 : a.cote == null ? 1 : +b.cote - +a.cote) : f(a, b)) || cmpRef(a.reference, b.reference));
   return resultat;
@@ -63,8 +64,10 @@ export const resultats = () => resultat;
 
 function histo() {
   const an = {};
-  for (const c of possedees()) if (c.an && correspond(c, "an")) an[c.an] = (an[c.an] || 0) + 1;
-  const toutes = possedees().map((c) => c.an).filter(Boolean);
+  const u = univers();
+  for (const c of u) if (c.an && correspond(c, "an")) an[c.an] = (an[c.an] || 0) + 1;
+  const toutes = u.map((c) => c.an).filter(Boolean);
+  if (!toutes.length) return "";
   const min = Math.min(...toutes), max = Math.max(...toutes);
   const m = Math.max(1, ...Object.values(an));
   let h = "";
@@ -77,10 +80,12 @@ function histo() {
 
 function listePuces() {
   const compte = {};
-  for (const c of possedees()) if (correspond(c, "puce")) compte[c.puce] = (compte[c.puce] || 0) + 1;
-  const toutes = [...new Set(possedees().map((c) => c.puce))].sort();
+  const u = univers();
+  for (const c of u) if (correspond(c, "puce")) compte[c.puce] = (compte[c.puce] || 0) + 1;
+  const familleDe = new Map(u.map((c) => [c.puce, c.fam]));
+  const toutes = [...familleDe.keys()].filter(Boolean).sort();
   const fam = {};
-  for (const p of toutes) { const f = possedees().find((c) => c.puce === p).fam; (fam[f] = fam[f] || []).push(p); }
+  for (const p of toutes) { const f = familleDe.get(p); (fam[f] = fam[f] || []).push(p); }
   return ["Solaic", "Schlumberger", "Gemplus", "Oberthur", "Autres"].filter((f) => fam[f]).map((f) => `<div class="famille"><p>${f}</p>${fam[f].map((p) => `<label class="choix"><input type="checkbox" data-puce="${e(p)}"${F.puces.has(p) ? " checked" : ""}><span>${e(p)}</span><small>${compte[p] || 0}</small></label>`).join("")}</div>`).join("");
 }
 
@@ -88,8 +93,10 @@ function options(val, paires) { return paires.map(([v, l]) => `<option value="${
 
 function rail() {
   const series = [...new Set(possedees().map((c) => c.serie).filter(Boolean))].sort((a, b) => a.localeCompare(b, "fr"));
-  const unites = [...new Set(possedees().map((c) => c.unites).filter((u) => u != null))].sort((a, b) => a - b);
+  const unites = [...new Set(univers().map((c) => c.unites).filter((u) => u != null))].sort((a, b) => a - b);
+  const portees = [["", "Les miennes"], ["tout", "Toutes"], ["manques", "Manquantes"]];
   return `<h2 class="masque">Filtres</h2>
+  ${S.tailleCatalogue > 0 || S.admin ? `<fieldset><legend>Références</legend><div class="touches">${portees.map(([v, l]) => `<button type="button" class="touche${F.portee === v ? " on" : ""}" data-portee="${v}" aria-pressed="${F.portee === v}">${l}</button>`).join("")}</div></fieldset>` : ""}
   <fieldset><legend>Année d'émission</legend><div id="zone-histo">${histo()}</div></fieldset>
   <fieldset><legend>Unités</legend><div class="touches">${unites.map((u) => `<button type="button" class="touche${F.unites.has(String(u)) ? " on" : ""}" data-unites="${u}" aria-pressed="${F.unites.has(String(u))}">${u}</button>`).join("")}</div></fieldset>
   <fieldset><label for="f-dispo">Exemplaires</label><select id="f-dispo" data-f="dispo">${options(F.dispo, [["", "Toutes"], ["uniques", "Un seul"], ["doublons", "En double"]])}</select></fieldset>
@@ -104,13 +111,13 @@ function rail() {
 
 const estFiltre = () => F.q || F.an1 != null || F.puces.size || F.unites.size || F.etat || F.dispo || F.tirage || F.cote || F.serie || F.visuel;
 
-const tuile = (c) => `<button class="carte" data-id="${c.id}">
+const tuile = (c) => `<button class="carte${c.absente ? " absente" : ""}" data-id="${c.id}">
   <span class="objet pile${c.n >= 4 ? " p3" : c.n >= 2 ? " p2" : ""}">${visuel(c)}</span>
-  <span class="legende"><b>${e(c.reference)}</b>${c.n > 1 ? `<span class="qte">x${c.n}</span>` : ""}<span class="nom">${e(c.nom)}</span><span class="meta">${[c.an, e(c.puce), c.tirage ? tirageCourt(c.tirage) : ""].filter(Boolean).join(", ")}</span></span>
+  <span class="legende"><b>${e(c.reference)}</b>${c.absente ? `<span class="qte">manquante</span>` : c.n > 1 ? `<span class="qte">x${c.n}</span>` : ""}<span class="nom">${e(c.nom)}</span><span class="meta">${[c.an, e(c.puce), c.tirage ? tirageCourt(c.tirage) : ""].filter(Boolean).join(", ")}</span></span>
 </button>`;
 export function tirageCourt(t) { return t >= 1e6 ? `${String(+(t / 1e6).toFixed(2)).replace(".", ",")} M` : t >= 1000 ? `${Math.round(t / 1000)} 000` : String(t); }
 
-const ligne = (c) => `<tr data-id="${c.id}" tabindex="0"><td><b>${e(c.reference)}</b></td><td>${e(c.nom)}</td><td class="nbr">${c.unites ?? ""}</td><td>${e(c.puce)}</td><td>${c.date_emission ? c.date_emission.slice(0, 7).split("-").reverse().join("/") : ""}</td><td class="nbr">${c.tirage ? nb(+c.tirage) : ""}</td><td class="nbr">${c.cote != null ? eur(+c.cote) : ""}</td><td class="nbr">${c.n}</td></tr>`;
+const ligne = (c) => `<tr class="${c.absente ? "absente" : ""}" data-id="${c.id}" tabindex="0"><td><b>${e(c.reference)}</b></td><td>${e(c.nom)}</td><td class="nbr">${c.unites ?? ""}</td><td>${e(c.puce)}</td><td>${c.date_emission ? c.date_emission.slice(0, 7).split("-").reverse().join("/") : ""}</td><td class="nbr">${c.tirage ? nb(+c.tirage) : ""}</td><td class="nbr">${c.cote != null ? eur(+c.cote) : ""}</td><td class="nbr">${c.n}</td></tr>`;
 
 function suite() {
   const z = $("#liste");
@@ -138,7 +145,12 @@ export function rendreListe() {
   obs = new IntersectionObserver((en) => { if (en.some((x) => x.isIntersecting)) suite(); }, { rootMargin: "800px" });
   obs.observe($("#sentinelle"));
   const nbEx = resultat.reduce((t, c) => t + c.n, 0);
-  $("#compteur").innerHTML = `<b>${nb(resultat.length)}</b> carte${resultat.length > 1 ? "s" : ""} différente${resultat.length > 1 ? "s" : ""}, ${nb(nbEx)} exemplaire${nbEx > 1 ? "s" : ""}`;
+  const possede = resultat.filter((c) => !c.absente).length;
+  $("#compteur").innerHTML = F.portee === "tout" ? `<b>${nb(possede)}</b> possédées sur ${nb(resultat.length)} références${resultat.length ? `, soit ${Math.floor((possede / resultat.length) * 100)} %` : ""}`
+    : F.portee === "manques" ? `<b>${nb(resultat.length)}</b> référence${resultat.length > 1 ? "s" : ""} manquante${resultat.length > 1 ? "s" : ""}`
+    : `<b>${nb(resultat.length)}</b> carte${resultat.length > 1 ? "s" : ""} différente${resultat.length > 1 ? "s" : ""}, ${nb(nbEx)} exemplaire${nbEx > 1 ? "s" : ""}`;
+  const note = $("#note-catalogue");
+  if (note) { note.hidden = !(F.portee && !S.tailleCatalogue); }
   const zh = $("#zone-histo"); if (zh) zh.innerHTML = histo();
   const zp = $("#zone-puces"); if (zp) zp.innerHTML = listePuces();
   $("#raz").hidden = !estFiltre();
@@ -161,10 +173,19 @@ export function vueCollection(cible, onChange) {
         </div>
         <button class="lien" id="csv">Exporter cette sélection (CSV)</button>
       </div>
+      <p class="note" id="note-catalogue" hidden>Aucune référence n'est encore importée. <a href="#/atelier">Atelier, section Catalogue</a> : importez le CSV créé par l'un des scripts du dossier tools.</p>
       <div id="zone-liste"></div>
     </section>
   </div>`;
   rendreListe();
+  const preparer = async () => {
+    if (!F.portee || S.catalogue) return;
+    $("#compteur").textContent = "Chargement des références…";
+    try { await chargerCatalogue(); } catch (er) { F.portee = ""; message(er.message, "erreur"); }
+    $("#rail").innerHTML = rail();
+    rendreListe();
+  };
+  preparer();
   const c = $(".collection", cible);
   let debut = null, glisse = false;
   c.addEventListener("pointerdown", (ev) => { const b = ev.target.closest("[data-an]"); if (b) { debut = +b.dataset.an; glisse = false; ev.preventDefault(); } });
@@ -200,6 +221,11 @@ export function vueCollection(cible, onChange) {
     if (!t) return;
     if (t.dataset.id) return ouvrirFiche(+t.dataset.id, resultat.map((x) => x.id));
     if (t.dataset.unites) { const v = t.dataset.unites; F.unites.has(v) ? F.unites.delete(v) : F.unites.add(v); t.classList.toggle("on"); t.setAttribute("aria-pressed", F.unites.has(v)); rendreListe(); }
+    if (t.dataset.portee != null) {
+      F.portee = t.dataset.portee;
+      if (F.portee && !S.catalogue) preparer();
+      else { $("#rail").innerHTML = rail(); rendreListe(); }
+    }
     if (t.dataset.vue) { F.vue = t.dataset.vue; $$("[data-vue]", c).forEach((b) => { b.classList.toggle("on", b === t); b.setAttribute("aria-pressed", b === t); }); rendreListe(); }
     if (t.id === "raz" || t.id === "raz2") {
       Object.assign(F, { q: "", an1: null, an2: null, puces: new Set(), unites: new Set(), etat: "", dispo: "", tirage: "", cote: "", serie: "", visuel: "" });

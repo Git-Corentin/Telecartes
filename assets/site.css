@@ -129,6 +129,12 @@ select, input:not([type=checkbox]):not([type=range]):not(#q), textarea { width: 
 .nom { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .meta { display: block; color: var(--gris); font-size: .86rem; }
 .carte:hover .nom { text-decoration: underline; }
+.absente .objet { filter: grayscale(1); opacity: .42; }
+.fiche-absente .objet { filter: grayscale(1); opacity: .55; }
+.carte.absente .legende, tr.absente { color: var(--gris); }
+.carte.absente .qte { color: var(--gris); font-weight: 400; font-size: .86rem; }
+.carte.absente:hover .objet { opacity: .8; }
+#note-catalogue { max-width: none; }
 .defile { overflow-x: auto; }
 .tableau { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 .tableau th { text-align: left; font-weight: 700; border-bottom: 2px solid var(--encre); padding: 5px 9px; position: sticky; top: 0; background: var(--plastique); }
@@ -247,6 +253,7 @@ dd { margin: 0; font-weight: 700; }
 .depot { border: 2px dashed #8D968F; padding: 10px; border-radius: 3px; cursor: pointer; font-weight: 700; }
 .depot input { display: block; margin-top: 5px; font-weight: 400; background: none !important; border: 0 !important; padding: 0 !important; }
 .grand-depot { display: block; padding: 28px 18px; background: var(--clair); margin-bottom: 10px; }
+.origine { display: block; max-width: 320px; font-weight: 700; margin-bottom: 8px; }
 .rangee { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 9px; }
 .ligne-form { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; margin-top: 18px; }
 .ligne-form label { flex: 1 1 130px; font-weight: 700; }

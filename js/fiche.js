@@ -51,6 +51,7 @@ const liens = (c) => {
 
 function rendre() {
   const c = courant;
+  if (c.absente) return rendreAbsente(c);
   const pp = photoPuce(c.puce);
   const ligneEx = (x) => {
     const p = position(x.indice);
@@ -69,7 +70,7 @@ function rendre() {
     <button class="fermer" data-fermer aria-label="Fermer">×</button>
     <div class="fiche-visuel">
       <button class="retourner" data-retourner aria-label="Retourner la carte"><span class="objet grand">${visuel(c, { verso })}</span></button>
-      <p class="discret">${c.image_recto ? "" : "Couverture provisoire, le visuel n'est pas encore ajouté. "}Touchez la carte pour la retourner.</p>
+      <p class="discret">${c.image_recto ? (c.image_source && c.image_source !== "Photo personnelle" ? `Visuel : ${e(c.image_source)}. ` : "") : "Couverture provisoire, le visuel n'est pas encore ajouté. "}Touchez la carte pour la retourner.</p>
       <div class="fiche-nav">
         <button class="touche" data-prec aria-label="Carte précédente">‹</button>
         <button class="touche" data-suiv aria-label="Carte suivante">›</button>
@@ -95,6 +96,28 @@ function rendre() {
   </div>`;
 }
 
+function rendreAbsente(c) {
+  $("#fiche-corps").innerHTML = `<div class="fiche fiche-absente">
+    <button class="fermer" data-fermer aria-label="Fermer">×</button>
+    <div class="fiche-visuel"><span class="objet grand">${visuel(c)}</span>
+      <div class="fiche-nav"><button class="touche" data-prec aria-label="Carte précédente">‹</button><button class="touche" data-suiv aria-label="Carte suivante">›</button></div></div>
+    <div class="fiche-infos">
+      <p class="fiche-ref">${e(c.reference)}</p>
+      <h2>${e(c.nom)}</h2>
+      <p><b>Pas encore dans la collection.</b></p>
+      <dl>
+        <div><dt>Émission</dt><dd>${c.date_emission ? mois(c.date_emission) : "inconnue"}</dd></div>
+        <div><dt>Unités</dt><dd>${c.unites ?? "non indiquées"}</dd></div>
+        <div><dt>Tirage</dt><dd>${c.tirage ? nb(+c.tirage) : "inconnu"}</dd></div>
+        <div><dt>Cote</dt><dd>${c.cote != null ? eur(+c.cote) : "non cotée"}</dd></div>
+        <div><dt>Puce</dt><dd>${e(c.puce || "inconnue")}</dd></div>
+        <div><dt>Source</dt><dd>${e(c.image_source || "Catalogue")}</dd></div>
+      </dl>
+      <p class="fiche-liens">Chercher ailleurs : ${liens(c)}</p>
+      ${S.admin ? `<p class="fiche-admin"><button class="bouton primaire" data-ajout="${c.id}">Ajouter à la collection</button> <button class="bouton" data-souhait>Ajouter aux recherchées</button></p>` : ""}
+    </div></div>`;
+}
+
 async function majEx(x, patch) {
   try {
     await db.modifier("exemplaires", x.id, patch);
@@ -118,6 +141,11 @@ dlg.addEventListener("click", async (ev) => {
   if (t.matches("[data-prec]")) return voisin(-1);
   if (t.matches("[data-suiv]")) return voisin(1);
   if (t.matches("[data-ajout]")) { ev.preventDefault(); const id = t.dataset.ajout; dlg.close(); location.hash = `#/ajouter?type=${id}`; return; }
+  if (t.matches("[data-souhait]")) {
+    if (S.souhaits.some((s) => s.reference === courant.reference)) return message("Cette référence est déjà dans les recherchées.");
+    try { const [l] = await db.ajouter("souhaits", [{ reference: courant.reference, nom: courant.nom }]); S.souhaits.push(l); message(`${courant.reference} ajoutée aux recherchées.`); } catch (er) { message(er.message, "erreur"); }
+    return;
+  }
   const li = t.closest("[data-ex]");
   if (!li) return;
   const x = courant.actifs.find((v) => v.id === +li.dataset.ex);

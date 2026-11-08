@@ -44,6 +44,27 @@ Trois sources, de la plus simple à la plus complète :
   Importez le CSV dans l'atelier, puis cliquez sur *Reprendre les visuels du catalogue*.
   Le formulaire d'ajout proposera alors toutes les références. Lisez les conditions données avec la clé. Gardez la mention de Colnect en pied de page et ne versez pas la clé dans le dépôt.
 
+### Visuels de telecart17.free.fr
+
+Le script se lance sur votre ordinateur (Node 18 ou plus), depuis ce dossier :
+
+```
+node tools/telecart17-images.mjs
+```
+
+Il cherche chaque référence dans `annees/{année}/{référence}.jpg`, écrit les images dans `visuels-telecart17/` et détaille le résultat dans `_rapport.csv`.
+Une image « approchée » vient d'une autre variante de la même référence : à contrôler.
+Déposez ensuite les images dans *Atelier > Visuels*, en choisissant `telecart17.free.fr` comme origine : la fiche de chaque carte cite alors la source.
+
+### Liste de toutes les références
+
+L'option *Toutes* de la collection affiche en gris les références manquantes. Elle s'appuie sur le catalogue :
+le script ci-dessous le construit à partir des pages annuelles de telecart17, puis importez le CSV dans *Atelier > Catalogue*.
+
+```
+node tools/telecart17-catalogue.mjs catalogue-telecart17.csv
+```
+
 ## Organisation
 
 | Dossier | Contenu |

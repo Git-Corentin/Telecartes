@@ -1,6 +1,6 @@
 import { CFG, norm, cmpRef, position, hash } from "./util.js";
 
-export const S = { cartes: [], souhaits: [], puces: [], user: null, admin: false, demo: !CFG.supabaseUrl, vide: false, tailleCatalogue: 0 };
+export const S = { absentes: [], catalogue: null, cartes: [], souhaits: [], puces: [], user: null, admin: false, demo: !CFG.supabaseUrl, vide: false, tailleCatalogue: 0 };
 const ecoute = new Set();
 export const surChangement = (f) => ecoute.add(f);
 export const notifier = () => { indexer(); ecoute.forEach((f) => f()); };
@@ -23,10 +23,45 @@ export function indexer() {
     c.dernierAjout = c.actifs.reduce((m, x) => (x.date_ajout > m ? x.date_ajout : m), "");
   }
   S.cartes.sort((a, b) => cmpRef(a.reference, b.reference) || (a.puce < b.puce ? -1 : 1));
+  calculerAbsentes();
+}
+
+// « SC5 argent-noir » et « SC5 », « GEM 1 A » et « GEM » désignent potentiellement la même puce :
+// les catalogues sont moins précis que l'inventaire, on compare donc le début du code.
+const basePuce = (p) => { const n = (p || "").toUpperCase().replace(/\s+/g, ""); const m = /^(SC\d|SO\d|GEM\d[AB]?|GEMNICKEL|GEM|OB\d|OR\d|LG\d|SA\d|BULL\d)/.exec(n); return m ? m[1] : n; };
+const memePuce = (a, b) => a.startsWith(b) || b.startsWith(a);
+
+function calculerAbsentes() {
+  S.absentes = [];
+  if (!S.catalogue) return;
+  const miennes = new Map();
+  for (const c of S.cartes) if (c.n > 0) { if (!miennes.has(c.reference)) miennes.set(c.reference, []); miennes.get(c.reference).push(basePuce(c.puce)); }
+  const retenues = new Map();
+  for (const x of S.catalogue) {
+    if (x.reference.includes(".")) continue; // variétés fines de Colnect (0736.1, 0736.V1)
+    const b = basePuce(x.puce), m = miennes.get(x.reference);
+    if (m && (!b || m.some((y) => memePuce(y, b)))) continue;
+    const cle = `${x.reference}|${b}|${x.unites ?? ""}`;
+    const avant = retenues.get(cle);
+    if (!avant || (!avant.nom && x.nom) || (!avant.image_url && x.image_url)) retenues.set(cle, x);
+  }
+  S.absentes = [...retenues.values()].map((x) => ({
+    id: -x.id, absente: true, reference: x.reference, puce: x.puce || "", unites: x.unites, nom: x.nom || "Nom inconnu",
+    date_emission: x.date_emission, tirage: x.tirage, cote: x.cote, serie: null,
+    // Une image en http serait bloquée ou remplacée sur un site en https.
+    image_recto: x.image_url?.startsWith("https:") ? x.image_url : null, image_source: x.source,
+    exemplaires: [], actifs: [], n: 0, an: annee(x), fam: famillePuce(x.puce), dernierAjout: "",
+    texte: norm([x.reference, x.nom, x.puce, annee(x), x.unites].join(" ")),
+  }));
+}
+export async function chargerCatalogue() {
+  if (S.catalogue) return;
+  S.catalogue = await db.catalogueEntier();
+  calculerAbsentes();
 }
 
 export const possedees = () => S.cartes.filter((c) => c.n > 0);
-export const carteParId = (id) => S.cartes.find((c) => c.id === +id);
+export const carteParId = (id) => S.cartes.find((c) => c.id === +id) || S.absentes.find((c) => c.id === +id);
 
 export function indicesOccupes() {
   const u = new Set();
@@ -161,14 +196,21 @@ export const db = {
     for (let i = 0; i < refs.length; i += 150) out.push(...verifier(await sb.from("catalogue").select("*").in("reference", refs.slice(i, i + 150))));
     return out;
   },
+  async catalogueEntier() {
+    return S.demo ? demoCatalogue.map((x, i) => ({ id: i + 1, ...x })) : toutLire("catalogue");
+  },
   async importerCatalogue(lignes, progres) {
-    if (S.demo) { demoCatalogue.push(...lignes); S.tailleCatalogue = demoCatalogue.length; return; }
+    // Deux fois la même clé dans un lot ferait échouer tout l'envoi.
+    lignes = [...new Map(lignes.map((l) => [[l.reference, l.puce, l.unites, l.source].join("|"), l])).values()];
+    S.catalogue = null;
+    if (S.demo) { demoCatalogue.push(...lignes); S.tailleCatalogue = demoCatalogue.length; return lignes.length; }
     for (let i = 0; i < lignes.length; i += 500) {
       verifier(await sb.from("catalogue").upsert(lignes.slice(i, i + 500), { onConflict: "reference,puce,unites,source" }));
       progres?.(Math.min(i + 500, lignes.length), lignes.length);
     }
     const { count } = await sb.from("catalogue").select("id", { count: "exact", head: true });
     S.tailleCatalogue = count || 0;
+    return lignes.length;
   },
   async importerCollection(items, puces, progres) {
     if (S.demo) throw new Error("L'import s'utilise une fois Supabase branché.");

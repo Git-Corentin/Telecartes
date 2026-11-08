@@ -237,6 +237,7 @@ export function vueAtelier(cible) {
       <p>${nb(avec)} cartes ont une photo, ${nb(sans.length)} n'en ont pas encore.</p>
       <label class="depot grand-depot">Déposez vos images ici, nommées par référence : F998.jpg, F998_verso.jpg
         <input type="file" id="t-images" accept="image/*" multiple></label>
+      <label class="origine">Origine des images déposées<select id="t-origine"><option>Photo personnelle</option><option>telecart17.free.fr</option></select></label>
       <p id="t-img-etat" class="discret" role="status"></p>
       <div class="rangee"><button class="bouton" id="t-reprendre">Reprendre les visuels du catalogue</button></div>
       <div class="file-visuels" id="t-file"></div>
@@ -294,8 +295,8 @@ export function vueAtelier(cible) {
         const h = r[0].map((x) => x.trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, ""));
         const lignes = r.slice(1).map((l) => ligneCatalogue(h, l)).filter((l) => l.reference);
         if (!lignes.length) throw new Error("Aucune ligne reconnue : vérifiez la colonne « reference ».");
-        await db.importerCatalogue(lignes, (a, b) => { $("#t-cat-etat").textContent = `${a} sur ${b}`; });
-        message(`${nb(lignes.length)} références importées dans le catalogue.`); vueAtelier(cible);
+        const importees = await db.importerCatalogue(lignes, (a, b) => { $("#t-cat-etat").textContent = `${a} sur ${b}`; });
+        message(`${nb(importees)} références importées dans le catalogue.`); vueAtelier(cible);
       }
       if (t.id === "t-restaure") {
         const s = JSON.parse(await t.files[0].text());
@@ -308,16 +309,18 @@ export function vueAtelier(cible) {
 
   async function deposer(fics) {
     const etat = $("#t-img-etat"); let ok = 0; const rates = [];
+    const origine = $("#t-origine").value;
     await parLots(fics, 3, async (f) => {
-      const m = /^([A-Za-z-]*\d+(?:bis)?[A-Za-z]*?)(?:[ _-]?(verso|recto))?\.[a-z0-9]+$/i.exec(f.name);
-      const ref = m?.[1];
+      const base = f.name.replace(/\.[^.]+$/, "");
+      const m = /^(.*?)(?:[ _-]?(verso|recto))?$/i.exec(base);
+      const ref = m[1];
       let cibles = S.cartes.filter((c) => c.reference === ref);
       if (!cibles.length && ref) cibles = S.cartes.filter((c) => c.reference.toLowerCase() === ref.toLowerCase());
       if (!cibles.length) { rates.push(f.name); return; }
       const face = /verso/i.test(m[2] || "") ? "image_verso" : "image_recto";
       try {
         const url = await db.envoyerImage(`cartes/${cheminSur(ref)}-${face}-${Date.now()}.webp`, await reduireImage(f));
-        for (const c of cibles) { const p = { [face]: url, image_source: "Photo personnelle" }; await db.modifier("cartes", c.id, p); Object.assign(c, p); }
+        for (const c of cibles) { const p = { [face]: url, image_source: origine }; await db.modifier("cartes", c.id, p); Object.assign(c, p); }
       } catch { rates.push(f.name); return; }
       ok++; etat.textContent = `${ok} image${ok > 1 ? "s" : ""} rattachée${ok > 1 ? "s" : ""}…`;
     });
