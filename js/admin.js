@@ -1,5 +1,5 @@
 import { e, $, $$, nb, CFG, position, indiceDe, message, reduireImage, telecharger, aujourdhui, jour, urlSure, codeColnect } from "./util.js";
-import { S, db, notifier, carteParId, prochainIndice, indicesOccupes, seedVersLignes } from "./store.js";
+import { S, db, notifier, carteParId, prochainIndice, indicesOccupes, seedVersLignes, chargerCatalogue, catalogueFourni, lignesCatalogueFourni } from "./store.js";
 import { visuel, faceGeneree } from "./face.js";
 import { traduire, ouvrirFiche } from "./fiche.js";
 
@@ -230,14 +230,13 @@ export function vueAtelier(cible) {
     <nav class="atelier-nav" aria-label="Sections">${S.vide || S.demo ? `<a href="#imp">Import</a>` : ""}<a href="#vis">Visuels</a><a href="#ver">À vérifier (${conflits.length})</a><a href="#puc">Puces</a><a href="#cat">Catalogue</a><a href="#sau">Sauvegarde</a></nav>
     <h1>Atelier</h1>
     ${S.vide || S.demo ? `<section id="imp"><h2>Importer la collection</h2>
-      <p>Charge les 959 cartes et 2 073 exemplaires repris de votre fichier Excel. À faire une seule fois, sur une base vide.</p>
+      <p>Charge les 959 cartes et 2 073 exemplaires repris de votre fichier Excel, ainsi que le catalogue des références. À faire une seule fois, sur une base vide.</p>
       <button class="bouton primaire" id="t-import" ${S.demo ? "disabled" : ""}>Importer la collection</button> <span id="t-prog" class="discret" role="status"></span>
       ${S.demo ? `<p class="note">Disponible une fois Supabase branché.</p>` : ""}</section>` : ""}
     <section id="vis"><h2>Visuels</h2>
       <p>${nb(avec)} cartes ont une photo, ${nb(sans.length)} n'en ont pas encore.</p>
-      <label class="depot grand-depot">Déposez vos images ici, nommées par référence : F998.jpg, F998_verso.jpg
+      <label class="depot grand-depot">Déposez vos images ici. Vos photos : F998.jpg, F998_verso.jpg. Le dossier visuels-catalogue : tous les fichiers d'un coup.
         <input type="file" id="t-images" accept="image/*" multiple></label>
-      <label class="origine">Origine des images déposées<select id="t-origine"><option>Photo personnelle</option><option>telecart17.free.fr</option></select></label>
       <p id="t-img-etat" class="discret" role="status"></p>
       <div class="rangee"><button class="bouton" id="t-reprendre">Reprendre les visuels du catalogue</button></div>
       <div class="file-visuels" id="t-file"></div>
@@ -253,7 +252,7 @@ export function vueAtelier(cible) {
     </section>
     <section id="cat"><h2>Catalogue</h2>
       <p>${nb(S.tailleCatalogue)} références servent à préremplir le formulaire d'ajout, en plus de vos propres cartes. Colonnes reconnues : reference, nom, unites, puce, date, tirage, cote, image.</p>
-      <label class="bouton fichier">Importer un CSV<input type="file" id="t-cat" accept=".csv,text/csv"></label> <span id="t-cat-etat" class="discret" role="status"></span>
+      <div class="rangee"><button class="bouton primaire" id="t-cat-fourni">Importer le catalogue fourni</button><label class="bouton fichier">Importer un CSV<input type="file" id="t-cat" accept=".csv,text/csv"></label></div> <span id="t-cat-etat" class="discret" role="status"></span>
     </section>
     <section id="sau"><h2>Sauvegarde</h2>
       <div class="rangee"><button class="bouton" id="t-sauve">Télécharger une sauvegarde complète (JSON)</button>
@@ -309,9 +308,24 @@ export function vueAtelier(cible) {
 
   async function deposer(fics) {
     const etat = $("#t-img-etat"); let ok = 0; const rates = [];
-    const origine = $("#t-origine").value;
+    const SRC = "bertrand.dippe.free.fr";
+    const estCode = (f) => /^\d{4,5}$/.test(f.name.replace(/\.[^.]+$/, ""));
+    let carteVisuel = {};
+    if (fics.some(estCode)) { await chargerCatalogue(); carteVisuel = (await catalogueFourni()).visuels; }
     await parLots(fics, 3, async (f) => {
       const base = f.name.replace(/\.[^.]+$/, "");
+      if (estCode(f)) {
+        try {
+          const url = await db.envoyerImage(`catalogue/${base}.webp`, await reduireImage(f));
+          await db.imageCatalogue(base, url);
+          for (const c of S.cartes.filter((x) => carteVisuel[x.reference] === base && (!x.image_recto || x.image_source === SRC))) {
+            const p = { image_recto: url, image_source: SRC };
+            await db.modifier("cartes", c.id, p); Object.assign(c, p);
+          }
+          ok++; etat.textContent = `${ok} image${ok > 1 ? "s" : ""} rattachée${ok > 1 ? "s" : ""}…`;
+        } catch { rates.push(f.name); }
+        return;
+      }
       const m = /^(.*?)(?:[ _-]?(verso|recto))?$/i.exec(base);
       const ref = m[1];
       let cibles = S.cartes.filter((c) => c.reference === ref);
@@ -320,7 +334,7 @@ export function vueAtelier(cible) {
       const face = /verso/i.test(m[2] || "") ? "image_verso" : "image_recto";
       try {
         const url = await db.envoyerImage(`cartes/${cheminSur(ref)}-${face}-${Date.now()}.webp`, await reduireImage(f));
-        for (const c of cibles) { const p = { [face]: url, image_source: origine }; await db.modifier("cartes", c.id, p); Object.assign(c, p); }
+        for (const c of cibles) { const p = { [face]: url, image_source: "Photo personnelle" }; await db.modifier("cartes", c.id, p); Object.assign(c, p); }
       } catch { rates.push(f.name); return; }
       ok++; etat.textContent = `${ok} image${ok > 1 ? "s" : ""} rattachée${ok > 1 ? "s" : ""}…`;
     });
@@ -336,7 +350,13 @@ export function vueAtelier(cible) {
         t.disabled = true;
         const seed = await (await fetch("data/seed.json")).json();
         await db.importerCollection(seedVersLignes(seed), seed.puces, (m) => { $("#t-prog").textContent = m; });
+        await db.importerCatalogue(lignesCatalogueFourni(await catalogueFourni()), (a, b) => { $("#t-prog").textContent = `Catalogue : ${a} sur ${b}`; });
         await db.charger(); notifier(); message("Collection importée."); location.hash = "#/collection";
+      }
+      if (t.id === "t-cat-fourni") {
+        t.disabled = true;
+        const n = await db.importerCatalogue(lignesCatalogueFourni(await catalogueFourni()), (a, b) => { $("#t-cat-etat").textContent = `${a} sur ${b}`; });
+        message(`${nb(n)} références importées dans le catalogue.`); vueAtelier(cible);
       }
       if (t.id === "t-reprendre") {
         const manquants = S.cartes.filter((c) => !c.image_recto);

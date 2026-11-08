@@ -24,7 +24,7 @@ function nav(route) {
 }
 
 function pied() {
-  $("#pied-texte").innerHTML = S.demo ? "Démonstration : Supabase n'est pas branché, les changements disparaissent au rechargement." : `Références et cotes d'après le catalogue Phonecote.${S.tailleCatalogue ? ' Données de catalogue et certains visuels : <a href="https://colnect.com/fr/phonecards" rel="noopener">Colnect</a>.' : ""}`;
+  $("#pied-texte").innerHTML = S.demo ? "Démonstration : Supabase n'est pas branché, les changements disparaissent au rechargement." : `Références et cotes d'après le catalogue Phonecote.${S.tailleCatalogue ? ' Catalogue et visuels : <a href="http://bertrand.dippe.free.fr" rel="noopener">bertrand.dippe.free.fr</a>.' : ""}`;
   $("#pied-compte").innerHTML = S.user ? `<button class="lien" id="sortir">Se déconnecter</button>` : `<a href="#/connexion">Connexion</a>`;
   const b = $("#sortir"); if (b) b.onclick = async () => { await db.deconnexion(); rendre(); message("Déconnecté."); };
 }

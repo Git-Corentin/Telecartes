@@ -44,26 +44,18 @@ Trois sources, de la plus simple à la plus complète :
   Importez le CSV dans l'atelier, puis cliquez sur *Reprendre les visuels du catalogue*.
   Le formulaire d'ajout proposera alors toutes les références. Lisez les conditions données avec la clé. Gardez la mention de Colnect en pied de page et ne versez pas la clé dans le dépôt.
 
-### Visuels de telecart17.free.fr
+### Catalogue et visuels de bertrand.dippe.free.fr
 
-Le script se lance sur votre ordinateur (Node 18 ou plus), depuis ce dossier :
+`data/catalogue.json` contient les références publiques de ce catalogue. Il est importé en même temps que la collection, ou par *Atelier > Catalogue > Importer le catalogue fourni*.
+Il alimente l'option *Toutes* de la collection et le préremplissage du formulaire d'ajout.
 
-```
-node tools/telecart17-images.mjs
-```
-
-Il cherche chaque référence dans `annees/{année}/{référence}.jpg`, écrit les images dans `visuels-telecart17/` et détaille le résultat dans `_rapport.csv`.
-Une image « approchée » vient d'une autre variante de la même référence : à contrôler.
-Déposez ensuite les images dans *Atelier > Visuels*, en choisissant `telecart17.free.fr` comme origine : la fiche de chaque carte cite alors la source.
-
-### Liste de toutes les références
-
-L'option *Toutes* de la collection affiche en gris les références manquantes. Elle s'appuie sur le catalogue :
-le script ci-dessous le construit à partir des pages annuelles de telecart17, puis importez le CSV dans *Atelier > Catalogue*.
+Pour les visuels, lancez sur votre ordinateur (Node 18 ou plus), depuis ce dossier :
 
 ```
-node tools/telecart17-catalogue.mjs catalogue-telecart17.csv
+node tools/telecharger-visuels.mjs
 ```
+
+Déposez ensuite tout le contenu de `visuels-catalogue/` dans *Atelier > Visuels*. Vos propres photos déjà ajoutées ne sont pas remplacées.
 
 ## Organisation
 
@@ -73,7 +65,7 @@ node tools/telecart17-catalogue.mjs catalogue-telecart17.csv
 | `js/` | `store` données, `collection`, `classeur`, `doublons` et `pdf`, `chiffres`, `admin` |
 | `supabase/schema.sql` | Tables et droits |
 | `data/seed.json` | Collection issue de l'Excel |
-| `tools/` | Conversion de l'Excel, synchronisation Colnect |
+| `tools/` | Conversion de l'Excel, construction du catalogue, téléchargement des visuels, synchronisation Colnect |
 
 Le classeur suit la formule de l'Excel : `page = (indice − 1) ÷ 25 + 1`, `case = reste + 1`.
 Une carte cédée libère sa case, et le prochain ajout la reprend.

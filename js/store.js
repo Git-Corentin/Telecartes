@@ -26,9 +26,9 @@ export function indexer() {
   calculerAbsentes();
 }
 
-// « SC5 argent-noir » et « SC5 », « GEM 1 A » et « GEM » désignent potentiellement la même puce :
-// les catalogues sont moins précis que l'inventaire, on compare donc le début du code.
-const basePuce = (p) => { const n = (p || "").toUpperCase().replace(/\s+/g, ""); const m = /^(SC\d|SO\d|GEM\d[AB]?|GEMNICKEL|GEM|OB\d|OR\d|LG\d|SA\d|BULL\d)/.exec(n); return m ? m[1] : n; };
+// Le catalogue note « GEM » là où l'inventaire distingue GEM 1 A et GEM 1 B, et de même pour
+// or/argent sur les SC : on compare donc la famille et le numéro de la puce.
+const basePuce = (p) => { const n = (p || "").toUpperCase().replace(/\s+/g, ""); const m = /^(SC\d|SO\d|GEM\d|GEMNICKEL|GEM|OB\d|OR\d|LG\d|SA\d|BULL\d)/.exec(n); return m ? m[1] : n; };
 const memePuce = (a, b) => a.startsWith(b) || b.startsWith(a);
 
 function calculerAbsentes() {
@@ -49,7 +49,7 @@ function calculerAbsentes() {
     id: -x.id, absente: true, reference: x.reference, puce: x.puce || "", unites: x.unites, nom: x.nom || "Nom inconnu",
     date_emission: x.date_emission, tirage: x.tirage, cote: x.cote, serie: null,
     // Une image en http serait bloquée ou remplacée sur un site en https.
-    image_recto: x.image_url?.startsWith("https:") ? x.image_url : null, image_source: x.source,
+    image_recto: /^(https:|blob:)/.test(x.image_url || "") ? x.image_url : null, image_source: x.source,
     exemplaires: [], actifs: [], n: 0, an: annee(x), fam: famillePuce(x.puce), dernierAjout: "",
     texte: norm([x.reference, x.nom, x.puce, annee(x), x.unites].join(" ")),
   }));
@@ -117,6 +117,14 @@ function assembler(cartes, ex) {
 let idDemo = 1e6;
 const demoCatalogue = [];
 
+let fourni = null;
+export async function catalogueFourni() {
+  fourni ||= await (await fetch("data/catalogue.json")).json();
+  return fourni;
+}
+// image_url est volontairement absent : réimporter ne doit pas effacer les visuels déjà envoyés.
+export const lignesCatalogueFourni = (f) => f.lignes.map(([reference, nom, unites, puce, date_emission, tirage, source_id]) => ({ reference, nom, unites, puce, date_emission, tirage, source_id, source: f.source }));
+
 export function seedVersLignes(seed) {
   return seed.cartes.map((c) => ({
     ligne: { reference: c.reference, puce: c.puce, unites: c.unites, nom: c.nom, date_emission: c.date, tirage: c.tirage, cote: c.cote, serie: c.serie, a_verifier: c.a_verifier || null, image_recto: c.image_recto ?? null, image_verso: c.image_verso ?? null, image_source: c.image_source ?? null, notes: c.notes ?? null },
@@ -133,6 +141,8 @@ export const db = {
       S.puces = seed.puces.map((code) => ({ code }));
       S.souhaits = [];
       S.vide = false;
+      if (!demoCatalogue.length) demoCatalogue.push(...lignesCatalogueFourni(await catalogueFourni()));
+      S.tailleCatalogue = demoCatalogue.length;
     } else {
       const [cartes, ex, souhaits, puces] = await Promise.all([toutLire("cartes"), toutLire("exemplaires"), toutLire("souhaits"), verifier(await sb.from("puces").select("*"))]);
       S.cartes = assembler(cartes, ex);
@@ -211,6 +221,11 @@ export const db = {
     const { count } = await sb.from("catalogue").select("id", { count: "exact", head: true });
     S.tailleCatalogue = count || 0;
     return lignes.length;
+  },
+  async imageCatalogue(code, url) {
+    if (S.demo) { for (const x of demoCatalogue) if (x.source_id === code) x.image_url = url; }
+    else verifier(await sb.from("catalogue").update({ image_url: url }).eq("source_id", code));
+    for (const x of S.catalogue || []) if (x.source_id === code) x.image_url = url;
   },
   async importerCollection(items, puces, progres) {
     if (S.demo) throw new Error("L'import s'utilise une fois Supabase branché.");

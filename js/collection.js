@@ -173,7 +173,7 @@ export function vueCollection(cible, onChange) {
         </div>
         <button class="lien" id="csv">Exporter cette sélection (CSV)</button>
       </div>
-      <p class="note" id="note-catalogue" hidden>Aucune référence n'est encore importée. <a href="#/atelier">Atelier, section Catalogue</a> : importez le CSV créé par l'un des scripts du dossier tools.</p>
+      <p class="note" id="note-catalogue" hidden>Aucune référence n'est encore importée. <a href="#/atelier">Atelier, section Catalogue</a> : cliquez sur Importer le catalogue fourni.</p>
       <div id="zone-liste"></div>
     </section>
   </div>`;
